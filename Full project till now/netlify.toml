@@ -1,0 +1,4 @@
+[build]
+  base = "Full project till now/frontend"
+  command = "npm run build"
+  publish = "dist
