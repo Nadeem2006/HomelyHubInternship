@@ -23,15 +23,13 @@ const getProperties = async (req, res) => {
       .search();
 
     // -----------------------------
-    // Count FILTERED properties
+    // Get filtered properties count
     // -----------------------------
     const filteredProperties =
       await features.query.clone();
 
     const totalFilteredProperties =
-      await Property.countDocuments(
-        filteredProperties.getFilter()
-      );
+      filteredProperties.length;
 
     // -----------------------------
     // Apply pagination
