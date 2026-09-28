@@ -1,157 +1,242 @@
-// ---- APIFeatures: builds the search query, 
-// The listings page has filters, a search box and pages. Doing
-// all that inside the controller would make it 100 lines long.
-// So we keep it here, and the controller stays clean:
-//     new APIFeatures(Property.find(), req.query)
-//       .filter().search().paginate()
-//
-// A class is a blueprint. 'new' makes one copy to work with.
 class APIFeatures {
-  // constructor runs once, when we say 'new APIFeatures(...)'
-  // query       = the unfinished mongoose search
-  // queryString = what the user asked for (req.query), the
-  //               part of the address after the ? mark
   constructor(query, queryString) {
-    (this.query = query), (this.queryString = queryString);
+    this.query = query;
+    this.queryString = queryString;
   }
 
-  // FILTER - the tick boxes: price, type, room, amenities
+  // =========================
+  // FILTER
+  // =========================
   filter() {
-  let filterQuery = {};
-  let queryObj = { ...this.queryString };
+    const queryObj = { ...this.queryString };
+    const filterQuery = {};
 
-  // PRICE
-  if (queryObj.minPrice && queryObj.maxPrice) {
-    filterQuery.price = {
-      $gte: Number(queryObj.minPrice),
-      $lte: Number(queryObj.maxPrice),
-    };
+    // -------------------------
+    // PRICE
+    // -------------------------
+    const minPrice = Number(queryObj.minPrice);
+    const maxPrice = Number(queryObj.maxPrice);
+
+    if (
+      queryObj.minPrice !== undefined &&
+      queryObj.minPrice !== "" &&
+      !isNaN(minPrice)
+    ) {
+      filterQuery.price = {
+        ...filterQuery.price,
+        $gte: minPrice,
+      };
+    }
+
+    if (
+      queryObj.maxPrice !== undefined &&
+      queryObj.maxPrice !== "" &&
+      !isNaN(maxPrice)
+    ) {
+      filterQuery.price = {
+        ...filterQuery.price,
+        $lte: maxPrice,
+      };
+    }
+
+    // -------------------------
+    // PROPERTY TYPE
+    // -------------------------
+    if (
+      queryObj.propertyType &&
+      queryObj.propertyType !== ""
+    ) {
+      let propertyTypeArray = [];
+
+      if (Array.isArray(queryObj.propertyType)) {
+        propertyTypeArray = queryObj.propertyType;
+      } else {
+        propertyTypeArray = queryObj.propertyType
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
+
+      if (propertyTypeArray.length > 0) {
+        filterQuery.propertyType = {
+          $in: propertyTypeArray,
+        };
+      }
+    }
+
+    // -------------------------
+    // ROOM TYPE
+    // -------------------------
+    if (
+      queryObj.roomType &&
+      queryObj.roomType !== "" &&
+      queryObj.roomType !== "Anytype"
+    ) {
+      filterQuery.roomType = queryObj.roomType;
+    }
+
+    // -------------------------
+    // AMENITIES
+    // -------------------------
+    if (
+      queryObj.amenities &&
+      queryObj.amenities !== ""
+    ) {
+      let amenitiesArray = [];
+
+      if (Array.isArray(queryObj.amenities)) {
+        amenitiesArray = queryObj.amenities;
+      } else {
+        amenitiesArray = queryObj.amenities
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+      }
+
+      if (amenitiesArray.length > 0) {
+        filterQuery.amenities = {
+          $all: amenitiesArray.map((amenity) => ({
+            $elemMatch: {
+              name: amenity,
+            },
+          })),
+        };
+      }
+    }
+
+    console.log("FILTER QUERY:", filterQuery);
+
+    this.query = this.query.find(filterQuery);
+
+    return this;
   }
 
-  // PROPERTY TYPE
-  if (queryObj.propertyType) {
-    const propertyTypeArray = queryObj.propertyType
-      .split(",")
-      .map((value) => value.trim());
+  // =========================
+  // SEARCH
+  // =========================
+  search() {
+    const queryObj = { ...this.queryString };
+    const searchQuery = {};
 
-    filterQuery.propertyType = {
-      $in: propertyTypeArray,
-    };
-  }
+    // -------------------------
+    // CITY / STATE / AREA
+    // -------------------------
+    if (
+      queryObj.city &&
+      queryObj.city.trim() !== ""
+    ) {
+      const city = queryObj.city.trim();
 
-  // ROOM TYPE
-  if (queryObj.roomType) {
-    filterQuery.roomType = queryObj.roomType;
-  }
-
-  // AMENITIES
-  if (queryObj.amenities) {
-    const amenitiesArray = Array.isArray(
-      queryObj.amenities
-    )
-      ? queryObj.amenities
-      : [queryObj.amenities];
-
-    filterQuery.amenities = {
-      $all: amenitiesArray.map((amenity) => ({
-        $elemMatch: {
-          name: amenity,
+      searchQuery.$or = [
+        {
+          "address.city": {
+            $regex: city,
+            $options: "i",
+          },
         },
-      })),
-    };
+        {
+          "address.state": {
+            $regex: city,
+            $options: "i",
+          },
+        },
+        {
+          "address.area": {
+            $regex: city,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    // -------------------------
+    // GUESTS
+    // -------------------------
+    if (
+      queryObj.guests &&
+      queryObj.guests !== ""
+    ) {
+      const guests = Number(queryObj.guests);
+
+      if (!isNaN(guests)) {
+        searchQuery.maximumGuest = {
+          $gte: guests,
+        };
+      }
+    }
+
+    // -------------------------
+    // DATE SEARCH
+    // -------------------------
+    if (
+      queryObj.dateIn &&
+      queryObj.dateOut
+    ) {
+      try {
+        const [inDay, inMonth, inYear] =
+          queryObj.dateIn.split("-");
+
+        const [outDay, outMonth, outYear] =
+          queryObj.dateOut.split("-");
+
+        const dateIn = new Date(
+          `${inYear}-${inMonth}-${inDay}T00:00:00.000Z`
+        );
+
+        const dateOut = new Date(
+          `${outYear}-${outMonth}-${outDay}T00:00:00.000Z`
+        );
+
+        if (
+          !isNaN(dateIn.getTime()) &&
+          !isNaN(dateOut.getTime())
+        ) {
+          searchQuery.currentBookings = {
+            $not: {
+              $elemMatch: {
+                fromDate: {
+                  $lt: dateOut,
+                },
+                toDate: {
+                  $gt: dateIn,
+                },
+              },
+            },
+          };
+        }
+      } catch (error) {
+        console.log(
+          "Date search error:",
+          error.message
+        );
+      }
+    }
+
+    console.log("SEARCH QUERY:", searchQuery);
+
+    this.query = this.query.find(searchQuery);
+
+    return this;
   }
 
-  this.query = this.query.find(filterQuery);
-
-  return this;
-}
-
-
- search() {
-  let searchQuery = {};
-  let queryObj = { ...this.queryString };
-
-  // City / State / Area search
-  if (queryObj.city) {
-    const city = queryObj.city.trim();
-
-    searchQuery.$or = [
-      {
-        "address.city": {
-          $regex: city,
-          $options: "i",
-        },
-      },
-      {
-        "address.state": {
-          $regex: city,
-          $options: "i",
-        },
-      },
-      {
-        "address.area": {
-          $regex: city,
-          $options: "i",
-        },
-      },
-    ];
-  }
-
-  // Guest search
-  if (queryObj.guests) {
-    searchQuery.maximumGuest = {
-      $gte: Number(queryObj.guests),
-    };
-  }
-
-  // Date search
-  if (queryObj.dateIn && queryObj.dateOut) {
-    const [inDay, inMonth, inYear] =
-      queryObj.dateIn.split("-");
-
-    const [outDay, outMonth, outYear] =
-      queryObj.dateOut.split("-");
-
-    const dateIn = new Date(
-      `${inYear}-${inMonth}-${inDay}T00:00:00.000Z`
-    );
-
-    const dateOut = new Date(
-      `${outYear}-${outMonth}-${outDay}T00:00:00.000Z`
-    );
-
-    searchQuery.currentBookings = {
-      $not: {
-        $elemMatch: {
-          fromDate: { $lt: dateOut },
-          toDate: { $gt: dateIn },
-        },
-      },
-    };
-  }
-
-  this.query = this.query.find(searchQuery);
-
-  return this;
-}
-
-
-  // PAGINATE - show 12 at a time, not 500 at once
+  // =========================
+  // PAGINATION
+  // =========================
   paginate() {
-    // * 1 turns the text '2' into the number 2.
-    // || 1 means: nothing sent, so start at page 1.
-    let page = this.queryString.page * 1 || 1;
-    // how many per page. 12 by default.
-    let limit = this.queryString.limit * 1 || 12;
-    // page 1 skips 0, page 2 skips 12, page 3 skips 24
-    let skip = (page - 1) * limit;
+    const page =
+      Number(this.queryString.page) || 1;
 
-    // skip that many, then take only 'limit' of them
-    this.query = this.query.skip(skip).limit(limit);
+    const limit =
+      Number(this.queryString.limit) || 12;
+
+    const skip = (page - 1) * limit;
+
+    this.query = this.query
+      .skip(skip)
+      .limit(limit);
+
     return this;
   }
 }
 
-
-// propertyController imports this to build the listings search
 export { APIFeatures };

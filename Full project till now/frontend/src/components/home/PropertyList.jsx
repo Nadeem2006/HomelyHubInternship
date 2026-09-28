@@ -80,11 +80,6 @@ const PropertyList = () => {
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    fetchProperties(1, {});
-  }, []);
-
   // Handle search
   useEffect(() => {
     const handleSearch = (event) => {
@@ -94,8 +89,6 @@ const PropertyList = () => {
 
       setSearchParams(params);
       setCurrentPage(1);
-
-      fetchProperties(1, params);
     };
 
     window.addEventListener(
@@ -120,8 +113,6 @@ const PropertyList = () => {
 
       setSearchParams(params);
       setCurrentPage(1);
-
-      fetchProperties(1, params);
     };
 
     window.addEventListener(
@@ -137,14 +128,32 @@ const PropertyList = () => {
     };
   }, []);
 
-  // Handle page change
+  // Handle logo reset
   useEffect(() => {
-    if (currentPage === 1) {
-      return;
-    }
+    const handleReset = () => {
+      console.log("Resetting properties from logo");
 
+      setSearchParams({});
+      setCurrentPage(1);
+    };
+
+    window.addEventListener(
+      "homelyHubReset",
+      handleReset
+    );
+
+    return () => {
+      window.removeEventListener(
+        "homelyHubReset",
+        handleReset
+      );
+    };
+  }, []);
+
+  // Fetch properties whenever page or search/filter parameters change
+  useEffect(() => {
     fetchProperties(currentPage, searchParams);
-  }, [currentPage]);
+  }, [currentPage, searchParams]);
 
   // Animation
   useEffect(() => {

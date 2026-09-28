@@ -44,19 +44,24 @@ const Header = () => {
     }
   };
 
-  const refreshFunction = () => {
-    // Keep your existing refresh logic here if needed
+  const handleLogoClick = (event) => {
+    if (location.pathname === "/") {
+      event.preventDefault();
+
+      window.dispatchEvent(
+        new CustomEvent("homelyHubReset")
+      );
+    }
   };
 
   return (
     <>
       <nav className="header row sticky-top">
-        <Link to="/">
+        <Link to="/" onClick={handleLogoClick}>
           <img
             src="/assets/logo.png"
             alt="logo"
             className="logo"
-            onClick={refreshFunction}
           />
         </Link>
 
@@ -69,6 +74,7 @@ const Header = () => {
               <span className="material-symbols-outlined">
                 auto_awesome
               </span>
+
               <span>Trip Genie</span>
             </Link>
           </div>
